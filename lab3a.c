@@ -149,12 +149,17 @@ char* GMT_time(__u32 time) {
 
 void print_free_block()
 {
-        int offset = SUPERBLOCKOFFSET + group_descriptor.bg_block_bitmap - s_log_block_size;
+        int offset = SUPERBLOCKOFFSET + (group_descriptor.bg_block_bitmap - 1) * s_log_block_size;
         char* byte_array = malloc(sizeof(char) * s_log_block_size);
         if ( pread(fd, byte_array, s_log_block_size, offset) < 0 ) exit_on_error("pread with block free bitmap");
         
         int block_index = 1;
-        for (__u32 i = 0; i < s_log_block_size; i++) for (int j = 0; j < 8; j++) if (~byte_array[i] & (1 << j)) fprintf(stdout, "BFREE,%d\n", block_index++);
+        for (__u32 i = 0; i < s_log_block_size; i++) 
+                for (int j = 0; j < 8; j++) 
+                {
+                        if (~byte_array[i] & (1 << j)) fprintf(stdout, "BFREE,%d\n", block_index);
+                        block_index++;
+                }     
         free(byte_array);
 }
 
