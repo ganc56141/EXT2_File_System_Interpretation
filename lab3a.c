@@ -13,22 +13,26 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <stdint.h>
+#include <math.h>
 #include "ext2_fs.h"
+
+#define SUPERBLOCKOFFSET 1024
+#define GROUP_INDEX 0
 
 int fd;
 struct ext2_super_block superblock;
 __u32 s_log_block_size;
-struct ext2_group_desc* table;
+struct ext2_group_desc* table;          // pointer to a table containing group_descriptor
 struct ext2_group_desc group_descriptor;
-#define GROUP_INDEX 0
-#define SUPERBLOCKOFFSET 1024
+
 
 // generic error function
-void exit_on_error(char* reason)
+void exit_on_error(char *reason)
 {
- fprintf(stderr, "%s error: %s\n", reason, strerror(errno));
- exit(1);
+        fprintf(stderr, "%s error: %s\n", reason, strerror(errno));
+        exit(1);
 }
+
 
 
 void DirectoryEntries(__u32 inode_num, struct ext2_inode inode) {
@@ -78,7 +82,6 @@ void IndirectBlockReferences(__u32 inode_num, int level, int block_num, int leve
     free(block);
 }
 
-
 void inode(__u32 inode_index)
 {
         char* buf;
@@ -112,22 +115,24 @@ void inode(__u32 inode_index)
         }
 }
 
-
 void GMT_time(char* time_buf, __u32 time) {
         // initializing time structure
  struct tm* t_struct;
-        time_t lt = time(NULL);
+        time_t lt = time;
         t_struct = gmttime(&lt);
-        
- // printing formatted time
- sprintf(time_buf, "%02d/%02d/%02d %02d:%02d:%02d",
-                t_struct->tm_mon,
-                t_struct->tm_mday,
-                t_struct->tm_year,
-                t_struct->tm_hour,
-                t_struct->tm_min,
+       
+	// printing formatted time
+	sprintf(time_buf, "%02d/%02d/%02d %02d:%02d:%02d", 
+                t_struct->tm_mon, 
+                t_struct->tm_mday, 
+                t_struct->tm_year, 
+                t_struct->tm_hour, 
+                t_struct->tm_min, 
                 t_struct->tm_sec);
+        
+   return time_buf;
 }
+  
 
 void print_free_block()
 {
@@ -139,6 +144,7 @@ void print_free_block()
         for (int i = 0; i < s_log_block_size; i++) for (int j = 0; j < 8; j++) if (!byte_array[i] & (1 << j)) fprintf(stdout, "BFREE,%d\n", block_index++);
         free(byte_array);
 }
+
 
 void InodesSummary() {
         char* byte_array = malloc(superblock.s_inodes_per_group / 8 * sizeof(char));
@@ -152,7 +158,6 @@ void InodesSummary() {
                 }
         free(byte_array);
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -200,6 +205,4 @@ int main(int argc, char *argv[])
         free(table);
         
         exit(0);
-
-
 }
