@@ -25,6 +25,15 @@ __u32 s_log_block_size;
 struct ext2_group_desc* table;          // pointer to a table containing group_descriptor
 struct ext2_group_desc group_descriptor;
 
+// declare functions
+void exit_on_error(char *reason);
+void DirectoryEntries(__u32 inode_num, struct ext2_inode inode);
+void IndirectBlockReferences(__u32 inode_num, int level, int block_num, int level_offset);
+void inode(__u32 inode_index);
+char* GMT_time(__u32 time);
+void print_free_block();
+void InodesSummary();
+
 
 // generic error function
 void exit_on_error(char *reason)
@@ -99,7 +108,7 @@ void inode(__u32 inode_index)
 
         // need to check? nah, I'll trust the calling function
         printf("INODE,%i,%c,%o,%i,%i,%i,%s,%s,%s,%i,%i", inode_index, type, this_inode.i_mode & 0x0FFF, this_inode.i_uid, this_inode.i_gid, this_inode.i_links_count,
-                   gmt_time(this_inode.i_atime), gmt_time(this_inode.i_ctime), gmt_time(this_inode.i_mtime), this_inode.i_size, this_inode.i_blocks);
+                   GMT_time(this_inode.i_atime), GMT_time(this_inode.i_ctime), GMT_time(this_inode.i_mtime), this_inode.i_size, this_inode.i_blocks);
         
         // For ordinary files (type 'f') and directories (type 'd') the next fifteen fields are block addresses
         if (type = 'f' || type =='d' || type == 's' && this_inode.i_size > 60) for (int i = 0; i < 15; i++) printf(",%d", this_inode.i_block[i]);
@@ -115,11 +124,12 @@ void inode(__u32 inode_index)
         }
 }
 
-void GMT_time(char* time_buf, __u32 time) {
+char* GMT_time(__u32 time) {
         // initializing time structure
  struct tm* t_struct;
         time_t lt = time;
-        t_struct = gmttime(&lt);
+        t_struct = gmtime(&lt);
+        char* time_buf = (char*)malloc(sizeof(char)*30);
        
 	// printing formatted time
 	sprintf(time_buf, "%02d/%02d/%02d %02d:%02d:%02d", 
