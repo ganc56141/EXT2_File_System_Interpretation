@@ -49,7 +49,7 @@ void gmt_time(__u32 time) {
         
         // initializing time structure
 	struct tm* t_struct; 
-        time_t lt = time(NULL); 
+        time_t lt = time; 
         t_struct = gmttime(&lt); 
 
 
@@ -63,7 +63,7 @@ void gmt_time(__u32 time) {
                 t_struct->tm_min, 
                 t_struct->tm_sec);
         
-        return time_buf
+        return time_buf;
 }
 
 void DirectoryEntries(__u32 inode_num, struct ext2_inode inode) {
@@ -79,7 +79,6 @@ void DirectoryEntries(__u32 inode_num, struct ext2_inode inode) {
             }
             byte_offset += dir.rec_len;
         }
-    
     }
 }
 
