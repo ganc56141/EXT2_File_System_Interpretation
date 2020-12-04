@@ -13,7 +13,6 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <stdint.h>
-#include <math.h>
 #include "ext2_fs.h"
 
 #define SUPERBLOCKOFFSET 1024
@@ -42,7 +41,11 @@ void exit_on_error(char *reason)
         exit(1);
 }
 
-
+int power(int a, int b)
+{
+    for (int i = 0; i < b; i++) a*=a;
+    return a;
+}
 
 void DirectoryEntries(__u32 inode_num, struct ext2_inode inode) {
     for (int i = 0; i < 12; i++) {
@@ -118,7 +121,7 @@ void inode(__u32 inode_index)
                 for (int i = 0; i < 3; i++)
                 {
                         long offset = 12;
-                        for (int j = 1; j < i+1; j++) offset += pow(256, j);
+                        for (int j = 1; j < i+1; j++) offset += power(256, j);
                         if (this_inode.i_block[12] > 0) IndirectBlockReferences(inode_index, i+1, this_inode.i_block[12+i], offset);
                 }
         }
