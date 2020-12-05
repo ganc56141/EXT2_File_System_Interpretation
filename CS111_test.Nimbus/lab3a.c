@@ -13,6 +13,7 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <stdint.h>
+#include <math.h>
 #include "ext2_fs.h"
 
 #define SUPERBLOCKOFFSET 1024
@@ -41,15 +42,11 @@ void exit_on_error(char *reason)
         exit(1);
 }
 
-int power(int a, int b)
-{
-    for (int i = 0; i < b; i++) a*=a;
-    return a;
-}
+
 
 void DirectoryEntries(__u32 inode_num, struct ext2_inode inode) {
     for (int i = 0; i < 12; i++) {
-        __u32 byte_offset = 0;
+        int byte_offset = 0;
         while (inode.i_block[i] != 0 && byte_offset < s_log_block_size) {
             struct ext2_dir_entry dir;
             if (pread(fd, &dir, sizeof(dir), (inode.i_block[i] - 1) * s_log_block_size + SUPERBLOCKOFFSET + byte_offset) < 0)
@@ -73,7 +70,7 @@ void IndirectBlockReferences(__u32 inode_num, int level, int block_num, int leve
     if (pread(fd, block, s_log_block_size, indirect_offset) < 0)
         exit_on_error("failed to read for indirect entry reference");
 
-    for (__u32 i = 0 ; i < s_log_block_size/4 ; i++) {
+    for (int i = 0 ; i < s_log_block_size/4 ; i++) {
         if(block[i] != 0){
             
             fprintf(stdout,"INDIRECT,%d,%d,%d,%d,%u\n",inode_num,level,level_offset,block_num,block[i]);
@@ -96,17 +93,17 @@ void IndirectBlockReferences(__u32 inode_num, int level, int block_num, int leve
 
 void inode(__u32 inode_index)
 {
-        
+        char* buf;
         struct ext2_inode this_inode;
         // group_descriptor = group, bg_inode_table is the block number of the inode table
-        int offset = SUPERBLOCKOFFSET + s_log_block_size * (group_descriptor.bg_inode_table-1) + (inode_index-1) * sizeof(this_inode);
-        if ( pread(fd, &this_inode, sizeof(struct ext2_inode), offset) < 0 ) exit_on_error("pread");
+        int offset = SUPERBLOCKOFFSET + s_log_block_size * group_descriptor.bg_inode_table + inode_index * sizeof(this_inode);
+        if ( pread(fd, buf, sizeof(struct ext2_inode), group_descriptor.bg_inode_table) < 0 ) exit_on_error('pread');
 
         // check type
         char type;
-        if ((this_inode.i_mode & 0xF000) == S_IFDIR) type = 'd';
-        else if ((this_inode.i_mode & 0xF000) == S_IFLNK) type = 'l';
-        else if ((this_inode.i_mode & 0xF000) == S_IFMT) type = 'f';
+        if (this_inode.i_mode & 0xF000 == S_IFDIR) type = 'd';
+        else if (this_inode.i_mode & 0xF000 == S_IFLNK) type = 'l';
+        else if (this_inode.i_mode & 0xF000 == S_IFMT) type = 'f';
         else type = '?';
 
         // need to check? nah, I'll trust the calling function
@@ -114,14 +111,14 @@ void inode(__u32 inode_index)
                    GMT_time(this_inode.i_atime), GMT_time(this_inode.i_ctime), GMT_time(this_inode.i_mtime), this_inode.i_size, this_inode.i_blocks);
         
         // For ordinary files (type 'f') and directories (type 'd') the next fifteen fields are block addresses
-        if (type == 'f' || type =='d' || (type == 's' && this_inode.i_size > 60)) for (int i = 0; i < 15; i++) printf(",%d", this_inode.i_block[i]);
-        if (type == 'f' || type =='d')
+        if (type = 'f' || type =='d' || type == 's' && this_inode.i_size > 60) for (int i = 0; i < 15; i++) printf(",%d", this_inode.i_block[i]);
+        if (type = 'f' || type =='d')
         {
                 if (type =='d') DirectoryEntries(inode_index, this_inode);
                 for (int i = 0; i < 3; i++)
                 {
                         long offset = 12;
-                        for (int j = 1; j < i+1; j++) offset += power(256, j);
+                        for (int j = 1; j < i+1; j++) offset += pow(256, j);
                         if (this_inode.i_block[12] > 0) IndirectBlockReferences(inode_index, i+1, this_inode.i_block[12+i], offset);
                 }
         }
@@ -149,17 +146,12 @@ char* GMT_time(__u32 time) {
 
 void print_free_block()
 {
-        int offset = SUPERBLOCKOFFSET + (group_descriptor.bg_block_bitmap - 1) * s_log_block_size;
+        int offset = SUPERBLOCKOFFSET + group_descriptor.bg_block_bitmap - s_log_block_size;
         char* byte_array = malloc(sizeof(char) * s_log_block_size);
-        if ( pread(fd, byte_array, s_log_block_size, offset) < 0 ) exit_on_error("pread with block free bitmap");
+        if ( pread(fd, byte_array, s_log_block_size, offset) < 0 ) exit_on_error('pread with block free bitmap');
         
         int block_index = 1;
-        for (__u32 i = 0; i < s_log_block_size; i++) 
-                for (int j = 0; j < 8; j++) 
-                {
-                        if (~byte_array[i] & (1 << j)) fprintf(stdout, "BFREE,%d\n", block_index);
-                        block_index++;
-                }     
+        for (int i = 0; i < s_log_block_size; i++) for (int j = 0; j < 8; j++) if (!byte_array[i] & (1 << j)) fprintf(stdout, "BFREE,%d\n", block_index++);
         free(byte_array);
 }
 
@@ -169,14 +161,10 @@ void InodesSummary() {
         if (pread(fd, byte_array, superblock.s_inodes_per_group / 8, (group_descriptor.bg_inode_bitmap - 1) * s_log_block_size + SUPERBLOCKOFFSET) < 0) exit_on_error("failed to read for Inodes summary");
         __u32 inode_index = 1;
 
-        for (__u32 i = 0; i < superblock.s_inodes_per_group / 8; i++)
+        for (int i = 0; i < superblock.s_inodes_per_group / 8; i++)
                 for (int j = 0; j < 8; j++){
-                    if (~byte_array[i] & (1 << j)){
-                        fprintf(stdout, "IFREE,%d\n", inode_index);
-                    }else{
-                        inode(inode_index);
-                    }
-                    inode_index++;
+                        if (!byte_array[i] & (1 << j)) fprintf(stdout, "BFREE,%d\n", inode_index++);
+                        else inode(inode_index);
                 }
         free(byte_array);
 }
@@ -184,7 +172,7 @@ void InodesSummary() {
 int main(int argc, char *argv[])
 {
        if (argc != 2) exit_on_error("Unrecognized arguments");
-       if ((fd = open(argv[1], O_RDONLY)) < 0) exit_on_error("Error: Failed to open the image");         //opening image
+       if (fd = open(argv[1], O_RDONLY) < 0) exit_on_error("Error: Failed to open the image");         //opening image
 
 
        // defining global variables
@@ -195,7 +183,7 @@ int main(int argc, char *argv[])
        long offset = (unsigned)SUPERBLOCKOFFSET + s_log_block_size;     // define offset to get to start of block containing group descriptor
        table = malloc(group_size);
 
-       if ( pread(fd, table, group_size, offset) < 0 ) exit_on_error("pread");
+       if ( pread(fd, table, group_size, offset) < 0 ) exit_on_error('pread');
        group_descriptor = table[0];
 
 
