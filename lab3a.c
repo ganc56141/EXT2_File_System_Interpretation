@@ -43,7 +43,7 @@ void exit_on_error(char *reason)
 
 int power(int a, int b)
 {
-    for (int i = 0; i < b; i++) a*=a;
+    for (int i = 0; i < b-1; i++) a*=a;
     return a;
 }
 
@@ -102,19 +102,23 @@ void inode(__u32 inode_index)
         int offset = SUPERBLOCKOFFSET + s_log_block_size * (group_descriptor.bg_inode_table-1) + (inode_index-1) * sizeof(this_inode);
         if ( pread(fd, &this_inode, sizeof(struct ext2_inode), offset) < 0 ) exit_on_error("pread");
 
+    if (this_inode.i_mode != 0 && this_inode.i_links_count != 0) {
         // check type
         char type;
-        if ((this_inode.i_mode & 0xF000) == S_IFDIR) type = 'd';
-        else if ((this_inode.i_mode & 0xF000) == S_IFLNK) type = 'l';
-        else if ((this_inode.i_mode & 0xF000) == S_IFMT) type = 'f';
+        if ((this_inode.i_mode & 0xF000) == 0x4000) type = 'd';
+        else if ((this_inode.i_mode & 0xF000) == 0xA000) type = 's';
+        else if ((this_inode.i_mode & 0xF000) == 0x8000) type = 'f';
         else type = '?';
 
         // need to check? nah, I'll trust the calling function
         printf("INODE,%i,%c,%o,%i,%i,%i,%s,%s,%s,%i,%i", inode_index, type, this_inode.i_mode & 0x0FFF, this_inode.i_uid, this_inode.i_gid, this_inode.i_links_count,
-                   GMT_time(this_inode.i_atime), GMT_time(this_inode.i_ctime), GMT_time(this_inode.i_mtime), this_inode.i_size, this_inode.i_blocks);
+                    GMT_time(this_inode.i_ctime), GMT_time(this_inode.i_mtime), GMT_time(this_inode.i_atime),this_inode.i_size, this_inode.i_blocks);
         
         // For ordinary files (type 'f') and directories (type 'd') the next fifteen fields are block addresses
         if (type == 'f' || type =='d' || (type == 's' && this_inode.i_size > 60)) for (int i = 0; i < 15; i++) printf(",%d", this_inode.i_block[i]);
+        
+        fprintf(stdout, "\n");
+        
         if (type == 'f' || type =='d')
         {
                 if (type =='d') DirectoryEntries(inode_index, this_inode);
@@ -122,9 +126,12 @@ void inode(__u32 inode_index)
                 {
                         long offset = 12;
                         for (int j = 1; j < i+1; j++) offset += power(256, j);
-                        if (this_inode.i_block[12] > 0) IndirectBlockReferences(inode_index, i+1, this_inode.i_block[12+i], offset);
+                        if (this_inode.i_block[12+i] != 0) IndirectBlockReferences(inode_index, i+1, this_inode.i_block[12+i], offset);
                 }
         }
+        
+    }
+        
 }
 
 char* GMT_time(__u32 time) {
@@ -163,13 +170,17 @@ void print_free_block()
         free(byte_array);
 }
 
+int block_offset(int num) {
+    return (num - 1) * (int) s_log_block_size + SUPERBLOCKOFFSET;
+}
 
 void InodesSummary() {
         char* byte_array = malloc(superblock.s_inodes_per_group / 8 * sizeof(char));
         if (pread(fd, byte_array, superblock.s_inodes_per_group / 8, (group_descriptor.bg_inode_bitmap - 1) * s_log_block_size + SUPERBLOCKOFFSET) < 0) exit_on_error("failed to read for Inodes summary");
-        __u32 inode_index = 1;
 
-        for (__u32 i = 0; i < superblock.s_inodes_per_group / 8; i++)
+    __u32 inode_index = 1;
+
+    for (__u32 i = 0; i < superblock.s_inodes_per_group / 8; i++){
                 for (int j = 0; j < 8; j++){
                     if (~byte_array[i] & (1 << j)){
                         fprintf(stdout, "IFREE,%d\n", inode_index);
@@ -178,7 +189,10 @@ void InodesSummary() {
                     }
                     inode_index++;
                 }
+    }
         free(byte_array);
+    
+ 
 }
 
 int main(int argc, char *argv[])
