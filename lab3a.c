@@ -142,13 +142,14 @@ char* GMT_time(__u32 time) {
         char* time_buf = (char*)malloc(sizeof(char)*30);
        
 	// printing formatted time
-	sprintf(time_buf, "%02d/%02d/%02d %02d:%02d:%02d", 
-                t_struct->tm_mon, 
-                t_struct->tm_mday, 
-                t_struct->tm_year, 
-                t_struct->tm_hour, 
-                t_struct->tm_min, 
-                t_struct->tm_sec);
+//	sprintf(time_buf, "%02d/%02d/%02d %02d:%02d:%02d",
+//                t_struct->tm_mon,
+//                t_struct->tm_mday,
+//                t_struct->tm_year,
+//                t_struct->tm_hour,
+//                t_struct->tm_min,
+//                t_struct->tm_sec);
+    strftime(time_buf, 24, "%m/%d/%y %H:%M:%S", t_struct);
         
    return time_buf;
 }
